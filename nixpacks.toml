@@ -1,0 +1,2 @@
+[phases.setup]
+pkgs = ["libglib2.0-0", "nss", "nspr", "atk", "atk-bridge2.0", "cups", "drm", "xkbcommon", "xcomposite", "xdamage", "xfixes", "xrandr", "gbm", "pango", "cairo"]
