@@ -6,12 +6,14 @@ const NUMERO_ASESOR = '573023394951@s.whatsapp.net';
 const sesiones = new Map();
 
 async function iniciarBot() {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    // Usamos una carpeta persistente para las credenciales
+    const { state, saveCreds } = await useMultiFileAuthState('./auth_info_baileys');
 
     const sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: false
+        printQRInTerminal: false,
+        browser: ['Pro-Tech Bot', 'Chrome', '10.0']
     });
 
     sock.ev.on('connection.update', async (update) => {
@@ -19,23 +21,26 @@ async function iniciarBot() {
 
         if (qr) {
             console.log('\n==================================================');
-            console.log('⚡ ESCANEA ESTE CÓDIGO QR CON TU WHATSAPP ⚡');
+            console.log('⚡ ESCANEA ESTE CÓDIGO QR ⚡');
             console.log('==================================================\n');
-            // Genera el código QR limpio en la consola
             qrcode.toString(qr, { small: true }, (err, string) => {
                 console.log(string);
             });
         }
 
         if (connection === 'close') {
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('⚠️ Conexión cerrada. Reconectando...', shouldReconnect);
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+            console.log(`⚠️ Conexión cerrada (Código: ${statusCode}). Reconectando...`, shouldReconnect);
+            
             if (shouldReconnect) {
                 iniciarBot();
+            } else {
+                console.log('❌ Sesión cerrada permanentemente. Necesitas escanear el QR de nuevo.');
             }
         } else if (connection === 'open') {
             console.log('\n==================================================');
-            console.log('✅ ¡Bot Pro-Tech Maintenance conectado en la nube!');
+            console.log('✅ ¡Bot Pro-Tech Maintenance conectado y persistente!');
             console.log('==================================================\n');
         }
     });
@@ -49,9 +54,8 @@ async function iniciarBot() {
         if (!msg.message || msg.key.fromMe) return;
 
         const usuario = msg.key.remoteJid;
-        if (usuario.endsWith('@g.us')) return; // Ignorar grupos
+        if (usuario.endsWith('@g.us')) return;
 
-        // Obtener el texto del mensaje de forma segura
         const texto = (
             msg.message.conversation ||
             msg.message.extendedTextMessage?.text ||
@@ -65,7 +69,6 @@ async function iniciarBot() {
         }
         const estado = sesiones.get(usuario);
 
-        // Comando universal para reiniciar
         if (texto === 'menu' || texto === 'menú' || texto === 'inicio') {
             sesiones.set(usuario, { paso: 'MENU_PRINCIPAL', tipoCliente: '', interes: '', atendidoPorHumano: false });
             await sock.sendMessage(usuario, {
