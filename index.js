@@ -1,12 +1,37 @@
 const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode');
 const pino = require('pino');
+const express = require('express');
+const qrcode = require('qrcode');
 
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+let ultimoQR = '';
 const NUMERO_ASESOR = '573023394951@s.whatsapp.net';
 const sesiones = new Map();
 
+// Ruta web para ver el QR escaneable
+app.get('/', (req, res) => {
+    if (!ultimoQR) {
+        return res.send('<h2>⏳ El bot está iniciando o ya está conectado. Si ya vinculaste tu WhatsApp, ignora esta página.</h2>');
+    }
+    qrcode.toDataURL(ultimoQR, (err, url) => {
+        if (err) return res.send('Error al generar el QR web.');
+        res.send(`
+            <div style="text-align:center; margin-top:50px; font-family:sans-serif;">
+                <h2>⚡ Escanea este QR para conectar Pro-Tech Maintenance ⚡</h2>
+                <img src="${url}" alt="QR WhatsApp" style="width:300px; height:300px; border:2px solid #ccc; padding:10px; border-radius:10px;"/>
+                <p>Actualiza la página si no lo reconoce de inmediato.</p>
+            </div>
+        `);
+    });
+});
+
+app.listen(PORT, () => {
+    console.log(`🌐 Servidor web de QR activo en el puerto ${PORT}`);
+});
+
 async function iniciarBot() {
-    // Usamos una carpeta persistente para las credenciales
     const { state, saveCreds } = await useMultiFileAuthState('./auth_info_baileys');
 
     const sock = makeWASocket({
@@ -20,25 +45,19 @@ async function iniciarBot() {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-            console.log('\n==================================================');
-            console.log('⚡ ESCANEA ESTE CÓDIGO QR ⚡');
-            console.log('==================================================\n');
-            qrcode.toString(qr, { small: true }, (err, string) => {
-                console.log(string);
-            });
+            ultimoQR = qr;
+            console.log('\n[QR] Nuevo código QR generado. Entra a la URL de tu servicio en Render para escanearlo.\n');
         }
 
         if (connection === 'close') {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
             console.log(`⚠️ Conexión cerrada (Código: ${statusCode}). Reconectando...`, shouldReconnect);
-            
             if (shouldReconnect) {
                 iniciarBot();
-            } else {
-                console.log('❌ Sesión cerrada permanentemente. Necesitas escanear el QR de nuevo.');
             }
         } else if (connection === 'open') {
+            ultimoQR = ''; // Limpiar QR al conectar
             console.log('\n==================================================');
             console.log('✅ ¡Bot Pro-Tech Maintenance conectado y persistente!');
             console.log('==================================================\n');
@@ -165,7 +184,7 @@ async function iniciarBot() {
 }
 
 async function transferirAAsesor(sock, estado, usuarioCliente) {
-    estado.atendidoPorHumano = true;
+    estado.atendido_porHumano = true;
 
     await sock.sendMessage(usuarioCliente, {
         text: '👨‍💻 *¡Solicitud enviada con éxito!*\n\n' +
