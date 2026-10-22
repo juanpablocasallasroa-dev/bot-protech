@@ -57,7 +57,7 @@ async function iniciarBot() {
                 iniciarBot();
             }
         } else if (connection === 'open') {
-            ultimoQR = ''; // Limpiar QR al conectar
+            ultimoQR = '';
             console.log('\n==================================================');
             console.log('✅ ¡Bot Pro-Tech Maintenance conectado y persistente!');
             console.log('==================================================\n');
@@ -73,8 +73,6 @@ async function iniciarBot() {
         if (!msg.message || msg.key.fromMe) return;
 
         const usuario = msg.key.remoteJid;
-        if (usuario.endsWith('@g.us')) return;
-
         const texto = (
             msg.message.conversation ||
             msg.message.extendedTextMessage?.text ||
@@ -83,13 +81,38 @@ async function iniciarBot() {
 
         if (!texto) return;
 
+        // ----------------------------------------------------
+        // COMANDOS DE CONTROL DESDE TU WHATSAPP PERSONAL (ASESOR)
+        // ----------------------------------------------------
+        if (msg.key.remoteJid === NUMERO_ASESOR || msg.key.remoteJid.includes('573023394951')) {
+            if (texto.startsWith('activar ') || texto.startsWith('reactivar ')) {
+                const numeroLimpioInput = texto.replace('activar ', '').replace('reactivar ', '').trim();
+                const numeroDestino = numeroLimpioInput.includes('@') ? numeroLimpioInput : numeroLimpioInput + '@s.whatsapp.net';
+                
+                if (sesiones.has(numeroDestino)) {
+                    // Reiniciamos el estado del cliente por completo para que el bot vuelva a atenderlo
+                    sesiones.set(numeroDestino, { paso: 'MENU_PRINCIPAL', tipoCliente: '', interes: '', nombre: '', detalle: '', atendidoPorHumano: false });
+                    await sock.sendMessage(NUMERO_ASESOR, { text: `✅ ¡Listo, Juan! El bot ha sido REACTIVADO para el cliente con número ${numeroLimpioInput}. Volverá a responderle.` });
+                } else {
+                    await sock.sendMessage(NUMERO_ASESOR, { text: `⚠️ No encontré una sesión registrada con el número: ${numeroLimpioInput}` });
+                }
+                return;
+            }
+        }
+
+        if (usuario.endsWith('@g.us')) return; // Ignorar grupos
+
         if (!sesiones.has(usuario)) {
-            sesiones.set(usuario, { paso: 'INICIO', tipoCliente: '', interes: '', atendidoPorHumano: false });
+            sesiones.set(usuario, { paso: 'INICIO', tipoCliente: '', interes: '', nombre: '', detalle: '', atendidoPorHumano: false });
         }
         const estado = sesiones.get(usuario);
 
+        // Si está siendo atendido por humano, EL BOT IGNORA TOTALMENTE AL CLIENTE (No se reactiva solo)
+        if (estado.atendidoPorHumano) return;
+
+        // Comando manual por si el cliente quiere volver al menú principal escribiéndolo él mismo
         if (texto === 'menu' || texto === 'menú' || texto === 'inicio') {
-            sesiones.set(usuario, { paso: 'MENU_PRINCIPAL', tipoCliente: '', interes: '', atendidoPorHumano: false });
+            estado.paso = 'MENU_PRINCIPAL';
             await sock.sendMessage(usuario, {
                 text: '🔄 *Has vuelto al menú principal de Pro-Tech Maintenance.*\n\n' +
                       'Por favor, selecciona qué tipo de cliente eres:\n\n' +
@@ -100,37 +123,17 @@ async function iniciarBot() {
             return;
         }
 
-        if (estado.atendidoPorHumano) return;
-
         switch (estado.paso) {
             case 'INICIO':
             case 'MENU_PRINCIPAL':
                 if (texto === '1' || texto === 'empresa') {
                     estado.tipoCliente = 'Empresa / Institución';
-                    estado.paso = 'SELECCIONAR_SERVICIO';
-                    await sock.sendMessage(usuario, {
-                        text: '🏢 *Excelente, enfoque empresarial seleccionado.*\n\n' +
-                              '¿Qué tipo de solución tecnológica necesitas para tu organización?\n\n' +
-                              '🔌 *1.* Redes de Datos y Cableado Estructurado (LAN/WLAN)\n' +
-                              '🖥️ *2.* Instalación de Servidores Locales (DHCP, DNS, Web)\n' +
-                              '⚡ *3.* Seguridad Eléctrica, Racks y Puesta a Tierra\n' +
-                              '❓ *4.* Otro requerimiento o consulta general\n' +
-                              '👨‍💻 *5.* Hablar directamente con un Asesor Humano\n\n' +
-                              '_Escribe el número de tu opción._'
-                    });
+                    estado.paso = 'PEDIR_NOMBRE';
+                    await sock.sendMessage(usuario, { text: '🏢 *Excelente, enfoque empresarial seleccionado.*\n\nPor favor, dime: ¿Cuál es tu **nombre completo** o el de la persona encargada?' });
                 } else if (texto === '2' || texto === 'particular') {
                     estado.tipoCliente = 'Persona Natural';
-                    estado.paso = 'SELECCIONAR_SERVICIO';
-                    await sock.sendMessage(usuario, {
-                        text: '👤 *Entendido, atención particular seleccionada.*\n\n' +
-                              '¿En qué servicio estás interesado el día de hoy?\n\n' +
-                              '🔌 *1.* Cableado y puntos de red para hogares/oficinas\n' +
-                              '🛠️ *2.* Mantenimiento de equipos de cómputo y soporte\n' +
-                              '🌐 *3.* Configuración de redes Wi-Fi y dispositivos\n' +
-                              '❓ *4.* Otro requerimiento o consulta general\n' +
-                              '👨‍💻 *5.* Hablar directamente con un Asesor Humano\n\n' +
-                              '_Escribe el número de tu opción._'
-                    });
+                    estado.paso = 'PEDIR_NOMBRE';
+                    await sock.sendMessage(usuario, { text: '👤 *Entendido, atención particular seleccionada.*\n\nPor favor, dime: ¿Cuál es tu **nombre completo**?' });
                 } else {
                     await sock.sendMessage(usuario, {
                         text: '👋 *¡Hola! Hablas con Eva, la asistente virtual de Pro-Tech Maintenance.*\n\n' +
@@ -139,6 +142,35 @@ async function iniciarBot() {
                               '🏢 *1.* Empresa o Institución Educativa\n' +
                               '👤 *2.* Persona Natural / Particular\n\n' +
                               '_Escribe 1 o 2 para comenzar._'
+                    });
+                }
+                break;
+
+            case 'PEDIR_NOMBRE':
+                estado.nombre = msg.message.conversation || msg.message.extendedTextMessage?.text || 'Cliente';
+                estado.paso = 'SELECCIONAR_SERVICIO';
+                
+                if (estado.tipoCliente === 'Empresa / Institución') {
+                    await sock.sendMessage(usuario, {
+                        text: `Muchísimas gracias, *${estado.nombre}*.\n\n` +
+                              '¿Qué tipo de solución tecnológica necesitas para tu organización?\n\n` +
+                              '🔌 *1.* Redes de Datos y Cableado Estructurado (LAN/WLAN)\n' +
+                              '🖥️ *2.* Instalación de Servidores Locales (DHCP, DNS, Web)\n' +
+                              '⚡ *3.* Seguridad Eléctrica, Racks y Puesta a Tierra\n' +
+                              '❓ *4.* Otro requerimiento o consulta general\n' +
+                              '👨‍💻 *5.* Hablar directamente con un Asesor Humano\n\n` +
+                              '_Escribe el número de tu opción._'
+                    });
+                } else {
+                    await sock.sendMessage(usuario, {
+                        text: `Muchísimas gracias, *${estado.nombre}*.\n\n` +
+                              '¿En qué servicio estás interesado el día de hoy?\n\n' +
+                              '🔌 *1.* Cableado y puntos de red para hogares/oficinas\n' +
+                              '🛠️ *2.* Mantenimiento de equipos de cómputo y soporte\n' +
+                              '🌐 *3.* Configuración de redes Wi-Fi y dispositivos\n' +
+                              '❓ *4.* Otro requerimiento o consulta general\n' +
+                              '👨‍💻 *5.* Hablar directamente con un Asesor Humano\n\n` +
+                              '_Escribe el número de tu opción._'
                     });
                 }
                 break;
@@ -152,18 +184,15 @@ async function iniciarBot() {
                         '4': 'Consulta General u Otro Servicio'
                     };
                     estado.interes = opcionesTexto[texto];
-                    estado.paso = 'FINALIZADO';
+                    estado.paso = 'PEDIR_DETALLE';
 
                     await sock.sendMessage(usuario, {
-                        text: `📝 *¡Hemos registrado tu selección!*\n\n` +
-                              `• *Perfil:* ${estado.tipoCliente}\n` +
-                              `• *Interés:* ${estado.interes}\n\n` +
-                              `¿Deseas transferir este resumen a uno de nuestros asesores humanos para formalizar tu solicitud?\n\n` +
-                              `✅ *Sí* (Enviar con asesor)\n` +
-                              `❌ *No* (Reiniciar chat)`
+                        text: `📝 *¡Perfecto!*\n\n` +
+                              `Para terminar, cuéntame brevemente en un mensaje: ¿Qué problema específico tienes o qué detalle adicional debemos saber sobre tu requerimiento?`
                     });
                 } else if (texto === '5' || texto === 'asesor') {
                     estado.interes = 'Solicitud directa de Asesor';
+                    estado.detalle = 'El cliente solicitó asesor directo sin especificar área.';
                     estado.paso = 'FINALIZADO';
                     await transferirAAsesor(sock, estado, usuario);
                 } else {
@@ -171,38 +200,48 @@ async function iniciarBot() {
                 }
                 break;
 
-            case 'FINALIZADO':
-                if (texto === 'si' || texto === 's' || texto === '1' || texto.includes('sí')) {
-                    await transferirAAsesor(sock, estado, usuario);
-                } else {
-                    sesiones.set(usuario, { paso: 'MENU_PRINCIPAL', tipoCliente: '', interes: '', atendidoPorHumano: false });
-                    await sock.sendMessage(usuario, { text: '🔄 Chat reiniciado. Escribe cualquier mensaje para comenzar de nuevo.' });
-                }
+            case 'PEDIR_DETALLE':
+                estado.detalle = msg.message.conversation || msg.message.extendedTextMessage?.text || 'Sin detalles adicionales';
+                estado.paso = 'FINALIZADO';
+                await transferirAAsesor(sock, estado, usuario);
                 break;
         }
     });
 }
 
 async function transferirAAsesor(sock, estado, usuarioCliente) {
-    estado.atendido_porHumano = true;
+    estado.atendidoPorHumano = true; // PAUSA TOTAL DEL BOT PARA ESTE CLIENTE
 
+    // Mensaje para el cliente
     await sock.sendMessage(usuarioCliente, {
-        text: '👨‍💻 *¡Solicitud enviada con éxito!*\n\n' +
-              'Hemos transferido tus datos y tu requerimiento a nuestro equipo de asesores en Pro-Tech Maintenance. En pocos minutos te contactarán por este medio.\n\n' +
-              'El bot se ha pausado. ¡Gracias por confiar en nosotros!'
+        text: `👨‍💻 *¡Excelente, ${estado.nombre}! Solicitud registrada con éxito.*\n\n` +
+              'Hemos transferido tus datos a nuestro equipo de asesores en Pro-Tech Maintenance. En pocos minutos uno de nuestros especialistas te atenderá por este medio.\n\n' +
+              '_El bot ha finalizado su asistencia para dejarte en manos de nuestro equipo humano._'
     });
 
     try {
         const numeroLimpio = usuarioCliente.replace('@s.whatsapp.net', '');
+        
+        // Mensaje base estructurado para copiar y pegar
+        const mensajeBaseSugerido = `Oh hola ${estado.nombre} mucho gusto hablas con Juan el gerente de Pro-Tech Maintenance. Yo estaré aquí el día de hoy para ayudarte con tu solicitud sobre ${estado.interes}. ¿En qué te podemos colaborar exactamente?`;
+
         const resumenParaAsesor = 
-            `🚨 *NUEVO LEAD / CLIENTE EN ESPERA* 🚨\n\n` +
-            `📱 *Contacto:* wa.me/${numeroLimpio}\n` +
-            `🏢 *Tipo de Cliente:* ${estado.tipoCliente || 'No especificado'}\n` +
-            `🎯 *Interés Principal:* ${estado.interes || 'Consulta general'}\n\n` +
-            `_El bot se ha pausado para este chat. Ya puedes responderle directamente al cliente desde tu WhatsApp._`;
+            `🚨 *NUEVO CLIENTE EN ESPERA* 🚨\n\n` +
+            `👤 *Nombre:* ${estado.nombre}\n` +
+            `🏢 *Tipo:* ${estado.tipoCliente}\n` +
+            `🎯 *Interés:* ${estado.interes}\n` +
+            `💬 *Detalle:* "${estado.detalle}"\n` +
+            `📱 *Número:* ${numeroLimpio}\n\n` +
+            `📋 *MENSAJE BASE PARA COPIAR Y PEGAR:*\n` +
+            `----------------------------------\n` +
+            `"${mensajeBaseSugerido}"\n` +
+            `----------------------------------\n\n` +
+            `🔄 *¿Quieres volver a encender el bot para este cliente cuando termines?*\n` +
+            `Solo respóndeme aquí mismo con:\n` +
+            `\`activar ${numeroLimpio}\``;
 
         await sock.sendMessage(NUMERO_ASESOR, { text: resumenParaAsesor });
-        console.log(`[ALERTA] Resumen enviado al asesor sobre el usuario ${usuarioCliente}`);
+        console.log(`[ALERTA] Resumen y mensaje base enviado al asesor sobre ${estado.nombre}`);
     } catch (error) {
         console.error('Error al enviar la notificación al asesor:', error);
     }
