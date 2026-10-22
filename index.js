@@ -81,16 +81,13 @@ async function iniciarBot() {
 
         if (!texto) return;
 
-        // ----------------------------------------------------
-        // COMANDOS DE CONTROL DESDE TU WHATSAPP PERSONAL (ASESOR)
-        // ----------------------------------------------------
+        // Comandos de control desde tu WhatsApp personal (Asesor)
         if (msg.key.remoteJid === NUMERO_ASESOR || msg.key.remoteJid.includes('573023394951')) {
             if (texto.startsWith('activar ') || texto.startsWith('reactivar ')) {
                 const numeroLimpioInput = texto.replace('activar ', '').replace('reactivar ', '').trim();
                 const numeroDestino = numeroLimpioInput.includes('@') ? numeroLimpioInput : numeroLimpioInput + '@s.whatsapp.net';
                 
                 if (sesiones.has(numeroDestino)) {
-                    // Reiniciamos el estado del cliente por completo para que el bot vuelva a atenderlo
                     sesiones.set(numeroDestino, { paso: 'MENU_PRINCIPAL', tipoCliente: '', interes: '', nombre: '', detalle: '', atendidoPorHumano: false });
                     await sock.sendMessage(NUMERO_ASESOR, { text: `✅ ¡Listo, Juan! El bot ha sido REACTIVADO para el cliente con número ${numeroLimpioInput}. Volverá a responderle.` });
                 } else {
@@ -107,10 +104,8 @@ async function iniciarBot() {
         }
         const estado = sesiones.get(usuario);
 
-        // Si está siendo atendido por humano, EL BOT IGNORA TOTALMENTE AL CLIENTE (No se reactiva solo)
         if (estado.atendidoPorHumano) return;
 
-        // Comando manual por si el cliente quiere volver al menú principal escribiéndolo él mismo
         if (texto === 'menu' || texto === 'menú' || texto === 'inicio') {
             estado.paso = 'MENU_PRINCIPAL';
             await sock.sendMessage(usuario, {
@@ -153,12 +148,12 @@ async function iniciarBot() {
                 if (estado.tipoCliente === 'Empresa / Institución') {
                     await sock.sendMessage(usuario, {
                         text: `Muchísimas gracias, *${estado.nombre}*.\n\n` +
-                              '¿Qué tipo de solución tecnológica necesitas para tu organización?\n\n` +
+                              '¿Qué tipo de solución tecnológica necesitas para tu organización?\n\n' +
                               '🔌 *1.* Redes de Datos y Cableado Estructurado (LAN/WLAN)\n' +
                               '🖥️ *2.* Instalación de Servidores Locales (DHCP, DNS, Web)\n' +
                               '⚡ *3.* Seguridad Eléctrica, Racks y Puesta a Tierra\n' +
                               '❓ *4.* Otro requerimiento o consulta general\n' +
-                              '👨‍💻 *5.* Hablar directamente con un Asesor Humano\n\n` +
+                              '👨‍💻 *5.* Hablar directamente con un Asesor Humano\n\n' +
                               '_Escribe el número de tu opción._'
                     });
                 } else {
@@ -169,7 +164,7 @@ async function iniciarBot() {
                               '🛠️ *2.* Mantenimiento de equipos de cómputo y soporte\n' +
                               '🌐 *3.* Configuración de redes Wi-Fi y dispositivos\n' +
                               '❓ *4.* Otro requerimiento o consulta general\n' +
-                              '👨‍💻 *5.* Hablar directamente con un Asesor Humano\n\n` +
+                              '👨‍💻 *5.* Hablar directamente con un Asesor Humano\n\n' +
                               '_Escribe el número de tu opción._'
                     });
                 }
@@ -210,9 +205,8 @@ async function iniciarBot() {
 }
 
 async function transferirAAsesor(sock, estado, usuarioCliente) {
-    estado.atendidoPorHumano = true; // PAUSA TOTAL DEL BOT PARA ESTE CLIENTE
+    estado.atendidoPorHumano = true;
 
-    // Mensaje para el cliente
     await sock.sendMessage(usuarioCliente, {
         text: `👨‍💻 *¡Excelente, ${estado.nombre}! Solicitud registrada con éxito.*\n\n` +
               'Hemos transferido tus datos a nuestro equipo de asesores en Pro-Tech Maintenance. En pocos minutos uno de nuestros especialistas te atenderá por este medio.\n\n' +
@@ -222,7 +216,6 @@ async function transferirAAsesor(sock, estado, usuarioCliente) {
     try {
         const numeroLimpio = usuarioCliente.replace('@s.whatsapp.net', '');
         
-        // Mensaje base estructurado para copiar y pegar
         const mensajeBaseSugerido = `Oh hola ${estado.nombre} mucho gusto hablas con Juan el gerente de Pro-Tech Maintenance. Yo estaré aquí el día de hoy para ayudarte con tu solicitud sobre ${estado.interes}. ¿En qué te podemos colaborar exactamente?`;
 
         const resumenParaAsesor = 
